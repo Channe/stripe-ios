@@ -411,6 +411,14 @@ import PassKit
             self.delegate?.applePayContext(
                 self, didCreatePaymentMethod: paymentMethod, paymentInformation: payment
             ) { clientSecret, intentCreationError in
+                
+                // If both clientSecret and error is nil, we assume the payment intent was confirmed on the
+                // server and that we do not need to do anything else.
+                if (clientSecret == nil && intentCreationError == nil && self.authorizationController != nil) {
+                    handleFinalState(.success, nil)
+                    return
+                }
+                
                 guard let clientSecret = clientSecret, intentCreationError == nil,
                     self.authorizationController != nil
                 else {
