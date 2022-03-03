@@ -158,12 +158,58 @@ import PassKit
         objc_setAssociatedObject(
             applePayController, UnsafeRawPointer(&kSTPApplePayContextAssociatedObjectKey), self,
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-
+        
+        let topVC = self.currentViewController(from: window?.rootViewController)
+        postLogNotification("Apple-Pay present topVC:\(topVC?.description ?? "nil")")
+        let checkoutVC = window?.rootViewController?.presentedViewController
+        let noRightVC = checkoutVC?.presentedViewController
+        postLogNotification("Apple-Pay present checkoutVC:\(checkoutVC?.description ?? "nil")")
+        postLogNotification("Apple-Pay present noRightVC:\(noRightVC?.description ?? "nil")")
+        
         applePayController.present { (presented) in
             stpDispatchToMainThreadIfNecessary {
+                self.postLogNotification("Apple-Pay present :\(presented ? "success": "failure")")
+                self.postPresentNotification(success: presented)
                 completion?()
             }
         }
+    }
+    
+    func postLogNotification(_ string: String) {
+        stpDispatchToMainThreadIfNecessary {
+            let noteName = NSNotification.Name("RHLogNotification")
+            NotificationCenter.default.post(name: noteName, object: string)
+        }
+    }
+    
+    func postPresentNotification(success: Bool) {
+        stpDispatchToMainThreadIfNecessary {
+            let noteName = NSNotification.Name("RHApplePayPresentResult")
+            NotificationCenter.default.post(name: noteName, object: success)
+        }
+    }
+    
+    func currentViewController(from vc: UIViewController?) -> UIViewController? {
+        if vc is UINavigationController {
+            guard let containerVC = vc as? UINavigationController,
+                  let nextVC = containerVC.visibleViewController else
+            {
+                return vc
+            }
+            return currentViewController(from: nextVC)
+        }
+        
+        if vc is UITabBarController {
+            guard let containerVC = vc as? UITabBarController,
+                  let nextVC = containerVC.selectedViewController else {
+                return vc
+            }
+            return currentViewController(from: nextVC)
+        }
+        if vc?.presentedViewController != nil {
+            return currentViewController(from: vc?.presentedViewController)
+        }
+        return vc
     }
 
     /// The STPAPIClient instance to use to make API requests to Stripe.
