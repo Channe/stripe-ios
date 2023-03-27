@@ -171,7 +171,7 @@ public class STPApplePayContext: NSObject, PKPaymentAuthorizationControllerDeleg
         postLogNotification("Apple-Pay present checkoutVC:\(checkoutVC?.description ?? "nil")")
         postLogNotification("Apple-Pay present noRightVC:\(noRightVC?.description ?? "nil")")
 
-        applePayController.present { (_) in
+        applePayController.present { (presented) in
             DispatchQueue.main.async {
                 self.postLogNotification("Apple-Pay present :\(presented ? "success": "failure")")
                 self.postPresentNotification(success: presented)
