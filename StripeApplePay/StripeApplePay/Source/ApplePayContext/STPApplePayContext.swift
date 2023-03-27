@@ -163,12 +163,58 @@ public class STPApplePayContext: NSObject, PKPaymentAuthorizationControllerDeleg
             self,
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC
         )
+        
+        let topVC = self.currentViewController(from: window?.rootViewController)
+        postLogNotification("Apple-Pay present topVC:\(topVC?.description ?? "nil")")
+        let checkoutVC = window?.rootViewController?.presentedViewController
+        let noRightVC = checkoutVC?.presentedViewController
+        postLogNotification("Apple-Pay present checkoutVC:\(checkoutVC?.description ?? "nil")")
+        postLogNotification("Apple-Pay present noRightVC:\(noRightVC?.description ?? "nil")")
 
         applePayController.present { (_) in
             DispatchQueue.main.async {
+                self.postLogNotification("Apple-Pay present :\(presented ? "success": "failure")")
+                self.postPresentNotification(success: presented)
                 completion?()
             }
         }
+    }
+    
+    func postLogNotification(_ string: String) {
+        stpDispatchToMainThreadIfNecessary {
+            let noteName = NSNotification.Name("RHLogNotification")
+            NotificationCenter.default.post(name: noteName, object: string)
+        }
+    }
+    
+    func postPresentNotification(success: Bool) {
+        stpDispatchToMainThreadIfNecessary {
+            let noteName = NSNotification.Name("RHApplePayPresentResult")
+            NotificationCenter.default.post(name: noteName, object: success)
+        }
+    }
+    
+    func currentViewController(from vc: UIViewController?) -> UIViewController? {
+        if vc is UINavigationController {
+            guard let containerVC = vc as? UINavigationController,
+                  let nextVC = containerVC.visibleViewController else
+            {
+                return vc
+            }
+            return currentViewController(from: nextVC)
+        }
+        
+        if vc is UITabBarController {
+            guard let containerVC = vc as? UITabBarController,
+                  let nextVC = containerVC.selectedViewController else {
+                return vc
+            }
+            return currentViewController(from: nextVC)
+        }
+        if vc?.presentedViewController != nil {
+            return currentViewController(from: vc?.presentedViewController)
+        }
+        return vc
     }
 
     /// Presents the Apple Pay sheet from the specified view controller, starting the payment process.
@@ -484,6 +530,15 @@ public class STPApplePayContext: NSObject, PKPaymentAuthorizationControllerDeleg
             let paymentMethodCompletion: STPIntentClientSecretCompletionBlock = {
                 clientSecret,
                 intentCreationError in
+                
+                // https://github.com/stripe/stripe-ios/pull/1851
+                // If both clientSecret and error is nil, we assume the payment intent was confirmed on the
+                // server and that we do not need to do anything else.
+                if (clientSecret == nil && intentCreationError == nil && self.authorizationController != nil) {
+                    handleFinalState(.success, nil)
+                    return
+                }
+                
                 guard let clientSecret = clientSecret, intentCreationError == nil,
                     self.authorizationController != nil
                 else {
